@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>성적 확인 서명</title>
+<meta name="theme-color" content="#1f4fa3">
+<meta name="description" content="학생이 본인 성적을 확인하고 비고란에 서명하는 도구">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="성적서명">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one centered work column (max 640px); one screen at a time — 교사 준비 → 학생 번호판 → 본인 확인 → 성적·서명 → 교사 현황 */
+:root{
+  --paper:#f6f7f9; --surface:#ffffff; --ink:#18202e; --muted:#5d6676; --line:#dde1e8;
+  --accent:#1f4fa3; --accent-ink:#ffffff; --accent-soft:#e7eefb;
+  --seal:#c2352b; --seal-soft:#fbeceb; --ok:#1d7a4c; --ok-soft:#e5f4ec; --warn:#9a6400; --warn-soft:#fdf3dc;
+  --pad-bg:#ffffff; --pad-ink:#111111;
+  --f-body:"IBM Plex Sans KR",system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#11151c; --surface:#1a2029; --ink:#e7ebf2; --muted:#9aa4b4; --line:#2c3441;
+  --accent:#7ea6ec; --accent-ink:#0d1420; --accent-soft:#1d2a40;
+  --seal:#ef7a70; --seal-soft:#3a1f1d; --ok:#5fcf97; --ok-soft:#173226; --warn:#e8b45a; --warn-soft:#3a2d14;
+  --pad-bg:#ffffff; --pad-ink:#111111; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#11151c; --surface:#1a2029; --ink:#e7ebf2; --muted:#9aa4b4; --line:#2c3441;
+  --accent:#7ea6ec; --accent-ink:#0d1420; --accent-soft:#1d2a40;
+  --seal:#ef7a70; --seal-soft:#3a1f1d; --ok:#5fcf97; --ok-soft:#173226; --warn:#e8b45a; --warn-soft:#3a2d14;
+  --pad-bg:#ffffff; --pad-ink:#111111; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.wrap>.wrap{width:100%}
+h1,h2{margin:0;text-wrap:balance;line-height:1.3}
+h1{font-size:1.5rem;font-weight:700}
+h2{font-size:1.15rem;font-weight:600}
+p{margin:0}
+.muted{color:var(--muted)}
+.small{font-size:.875rem}
+.eyebrow{font-size:.75rem;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;display:flex;flex-direction:column;gap:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row.end{justify-content:flex-end}
+.row.between{justify-content:space-between}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:10px 16px;font-weight:600;min-height:44px}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,label.drop:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.primary:disabled{opacity:.45;cursor:not-allowed}
+button.ghost{background:transparent;border-color:transparent;color:var(--muted);font-weight:500}
+button.ghost:hover{color:var(--ink);border-color:var(--line)}
+button.danger{color:var(--seal)}
+input[type=text],input[type=password]{font:inherit;font-size:1.1rem;padding:12px 14px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink);width:100%}
+.err{color:var(--seal);font-size:.9rem;font-weight:500;min-height:1.4em}
+/* setup */
+label.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;border:2px dashed var(--line);border-radius:var(--r);padding:32px 16px;cursor:pointer;background:var(--paper)}
+label.drop:hover,label.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+label.drop input{position:absolute;opacity:0;width:1px;height:1px}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:.95rem}
+.facts dt{color:var(--muted)}
+.facts dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.notice{border-radius:8px;padding:12px 14px;background:var(--warn-soft);color:var(--ink);display:flex;flex-direction:column;gap:8px;font-size:.95rem}
+.notice strong{color:var(--warn)}
+.check{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.check input{width:20px;height:20px;margin-top:3px;accent-color:var(--accent);flex:none}
+/* student */
+.lobby-head{display:flex;flex-direction:column;gap:4px;text-align:center;padding-top:8px}
+.picker{display:grid;grid-template-columns:56px minmax(0,1fr) 56px;gap:10px;align-items:stretch}
+.picker .arrow{font-size:1.1rem;padding:0;min-height:56px}
+.picker .arrow:disabled{opacity:.35;cursor:not-allowed}
+.picker select{font:inherit;font-size:1.15rem;font-weight:600;min-height:56px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);width:100%;min-width:0;cursor:pointer}
+.picker select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.signedimg{max-height:120px;width:auto;max-width:100%;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;align-self:flex-start}
+.progress{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.progress>i{display:block;height:100%;background:var(--ok);width:0;transition:width .3s}
+/* result */
+.who{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.who .name{font-size:1.6rem;font-weight:700}
+.scores{width:100%;border-collapse:collapse;font-size:.98rem}
+.scores th{text-align:left;font-weight:500;color:var(--ink);padding:12px 8px 12px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.scores th span{display:block;font-size:.8rem;color:var(--muted);font-weight:400}
+.scores td{text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums;font-size:1.25rem;font-weight:600;padding:12px 0;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:top}
+.scores tr.total th,.scores tr.total td{border-bottom:0;padding-top:14px}
+.scores tr.total td{color:var(--accent);font-size:1.5rem}
+.padbox{position:relative;border:1px solid var(--line);border-radius:var(--r);background:var(--pad-bg);overflow:hidden;touch-action:none}
+.padbox canvas{display:block;width:100%;height:200px;cursor:crosshair}
+.padbox .hint{position:absolute;left:0;right:0;bottom:44px;margin:0 24px;border-top:1px solid #c9ced8;padding-top:6px;text-align:center;font-size:.8rem;color:#8a92a0;pointer-events:none}
+.padbox.inked .hint{visibility:hidden}
+/* done */
+.stamp{align-self:center;width:112px;height:112px;border:4px solid var(--seal);border-radius:50%;color:var(--seal);display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:700;transform:rotate(-8deg);letter-spacing:.1em}
+@media (prefers-reduced-motion:no-preference){.stamp{animation:press .35s ease-out}@keyframes press{from{transform:rotate(-8deg) scale(1.4);opacity:0}to{transform:rotate(-8deg) scale(1);opacity:1}}}
+/* teacher */
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r)}
+table.list{width:100%;border-collapse:collapse;font-size:.92rem;min-width:420px}
+table.list th,table.list td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+table.list th{font-size:.78rem;color:var(--muted);font-weight:600;letter-spacing:.04em;background:var(--paper)}
+table.list tr:last-child td{border-bottom:0}
+table.list td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.sigthumb{height:28px;max-width:110px;background:#fff;border-radius:4px;padding:2px 4px;display:block}
+.pill{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.8rem;font-weight:600;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.old{background:var(--warn-soft);color:var(--warn)}
+.pill.none{background:var(--paper);color:var(--muted);border:1px solid var(--line)}
+.linkbtn{min-height:32px;padding:4px 10px;font-size:.82rem;font-weight:500}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:8px;font-size:.92rem;max-width:calc(100% - 32px);z-index:20}
+.foot{display:flex;justify-content:center}
+</style>
+<style>html{color-scheme:light}body{margin:0}img{max-width:100%}</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- 1. 교사 준비 -->
+  <section id="vSetup" class="wrap" style="gap:20px">
+    <div>
+      <p class="eyebrow">교사용 · 준비</p>
+      <h1>성적 확인 서명</h1>
+    </div>
+    <p class="muted">성적 일람표 엑셀 파일을 불러오면 번호를 한 명씩 넘기며 학생이 <b>본인 성적만</b> 확인하고 비고란에 서명합니다. 파일은 이 기기 브라우저 안에서만 열리며 어디에도 업로드되지 않습니다.</p>
+
+    <label class="drop" id="drop">
+      <input type="file" id="fileIn" accept=".xlsx">
+      <strong>엑셀 파일 선택 (.xlsx)</strong>
+      <span class="muted small">클릭하거나 파일을 여기로 끌어 놓으세요</span>
+    </label>
+    <p class="err" id="setupErr"></p>
+
+    <div id="setupInfo" class="panel" hidden>
+      <h2>불러온 내용</h2>
+      <dl class="facts" id="facts"></dl>
+      <div id="oldSigNotice" class="notice" hidden></div>
+      <div id="restoreNotice" class="notice" hidden></div>
+      <div class="row end"><button class="primary" id="startBtn">학생 확인 시작</button></div>
+    </div>
+  </section>
+
+  <!-- 2. 학생 화면: 번호 선택 + 성적 + 서명 -->
+  <section id="vStudent" class="wrap" hidden>
+    <div class="lobby-head">
+      <p class="eyebrow" id="lobbySubject"></p>
+      <h1 id="lobbyTitle">성적 확인</h1>
+    </div>
+    <div class="picker">
+      <button id="prevBtn" class="arrow" aria-label="이전 번호">◀</button>
+      <select id="numSel" aria-label="번호 선택"></select>
+      <button id="nextBtn" class="arrow" aria-label="다음 번호">▶</button>
+    </div>
+    <div class="progress" aria-hidden="true"><i id="progBar"></i></div>
+    <p class="small muted" id="progText" style="text-align:center"></p>
+
+    <div class="panel">
+      <p class="eyebrow" id="resSubject" hidden></p>
+      <div class="who"><span class="name" id="resName"></span><span class="muted" id="resNo"></span><span id="resState"></span></div>
+      <table class="scores" id="resTable"></table>
+    </div>
+    <div class="panel" id="signPanel">
+      <h2>서명</h2>
+      <label class="check"><input type="checkbox" id="agree"><span>위 성적을 확인했습니다.</span></label>
+      <div class="padbox" id="padbox"><canvas id="pad" aria-label="서명 칸"></canvas><p class="hint">이 칸에 손가락이나 마우스로 서명하세요</p></div>
+      <p class="err" id="signErr"></p>
+      <div class="row end">
+        <button id="padClear">다시 쓰기</button>
+        <button class="primary" id="signGo">서명 제출</button>
+      </div>
+      <p class="small muted">이의가 있으면 서명하지 말고 선생님께 말씀하세요.</p>
+    </div>
+    <div class="panel" id="signedPanel" hidden>
+      <h2>서명 완료</h2>
+      <img id="signedImg" class="signedimg" alt="제출한 서명">
+      <p class="small muted" id="signedNote"></p>
+    </div>
+    <div class="foot"><button class="ghost small" id="toTeacher">교사 메뉴</button></div>
+  </section>
+
+  <!-- 5. 완료 -->
+  <section id="vDone" class="wrap" hidden>
+    <div class="panel" style="align-items:center;text-align:center;padding-block:36px">
+      <div class="stamp">확인</div>
+      <h1>서명이 완료되었습니다</h1>
+      <p class="muted">다음 학생에게 기기를 넘겨 주세요.</p>
+      <button class="primary" id="doneBtn">다음 번호로 ▶</button>
+    </div>
+  </section>
+
+  <!-- 7. 교사 현황 -->
+  <section id="vTeacher" class="wrap" hidden>
+    <div>
+      <p class="eyebrow">교사 메뉴 · 현황</p>
+      <h1 id="tTitle">서명 현황</h1>
+    </div>
+    <div class="panel">
+      <div class="row between">
+        <p id="tSummary" style="font-weight:600"></p>
+        <button class="primary" id="dlBtn">서명 파일 다운로드</button>
+      </div>
+      <p class="small muted" id="dlName" style="overflow-wrap:anywhere"></p>
+      <p class="err" id="dlErr"></p>
+    </div>
+    <div class="tablewrap">
+      <table class="list">
+        <thead><tr><th>번호</th><th>이름</th><th>상태</th><th>서명</th><th></th></tr></thead>
+        <tbody id="tBody"></tbody>
+      </table>
+    </div>
+    <div class="row between">
+      <button class="ghost" id="tNewFile">다른 파일 불러오기</button>
+      <button id="tBack">학생 화면으로</button>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const VIEWS=["vSetup","vStudent","vDone","vTeacher"];
+function show(v){VIEWS.forEach(x=>$(x).hidden=(x!==v));window.scrollTo(0,0);}
+function toast(msg){const t=$("toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600);}
+
+/* ---------- state ---------- */
+const S={file:null,fileName:"",bytes:null,info:null,students:[],pin:"",sigs:{},clearOld:false,current:null,storeKey:""};
+// students: {row, no, cls, num, name, scores:[{label,sub,val}], total:{label,val}|null, oldSig:bool}
+
+/* ---------- storage (signatures only, per device) ---------- */
+function storeSave(){try{localStorage.setItem(S.storeKey,JSON.stringify({sigs:S.sigs,clearOld:S.clearOld}))}catch(e){}}
+function storeLoad(key){try{const v=localStorage.getItem(key);return v?JSON.parse(v):null}catch(e){return null}}
+function storeDrop(){try{localStorage.removeItem(S.storeKey)}catch(e){}}
+
+/* ---------- xlsx reading ---------- */
+const NS_MAIN="http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+const parseXml=s=>new DOMParser().parseFromString(s,"application/xml");
+const kids=(el,name)=>Array.from(el.getElementsByTagNameNS("*",name));
+function colToNum(s){let n=0;for(const ch of s)n=n*26+(ch.charCodeAt(0)-64);return n}
+function splitRef(r){const m=/^([A-Z]+)(\d+)$/.exec(r);return {c:colToNum(m[1]),r:+m[2]}}
+function resolvePath(base,target){
+  if(target.startsWith("/"))return target.slice(1);
+  const parts=base.split("/");parts.pop();
+  for(const seg of target.split("/")){if(seg==="..")parts.pop();else if(seg!==".")parts.push(seg)}
+  return parts.join("/");
+}
+function relsPathFor(p){const i=p.lastIndexOf("/");return p.slice(0,i)+"/_rels/"+p.slice(i+1)+".rels"}
+async function readRels(zip,partPath){
+  const f=zip.file(relsPathFor(partPath));if(!f)return [];
+  const d=parseXml(await f.async("string"));
+  return kids(d,"Relationship").map(e=>({id:e.getAttribute("Id"),type:e.getAttribute("Type"),target:e.getAttribute("Target"),path:resolvePath(partPath,e.getAttribute("Target"))}));
+}
+function textOf(si){ // shared string, skip phonetic runs
+  let s="";const walk=n=>{for(const c of n.childNodes){if(c.nodeType!==1)continue;if(c.localName==="rPh"||c.localName==="phoneticPr")continue;if(c.localName==="t")s+=c.textContent;else walk(c)}};walk(si);return s;
+}
+async function loadWorkbook(bytes){
+  const zip=await JSZip.loadAsync(bytes);
+  const wb=parseXml(await zip.file("xl/workbook.xml").async("string"));
+  const sheetEl=kids(wb,"sheet")[0];
+  const rid=sheetEl.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships","id")||sheetEl.getAttribute("r:id");
+  const wbRels=await readRels(zip,"xl/workbook.xml");
+  const sheetPath=wbRels.find(r=>r.id===rid).path;
+  let ss=[];const ssRel=wbRels.find(r=>/sharedStrings$/.test(r.type));
+  if(ssRel&&zip.file(ssRel.path)){ss=kids(parseXml(await zip.file(ssRel.path).async("string")),"si").map(textOf)}
+  const sheetXml=await zip.file(sheetPath).async("string");
+  const sd=parseXml(sheetXml);
+  const cells=new Map(); // "r,c" -> text
+  kids(sd,"c").forEach(c=>{
+    const ref=c.getAttribute("r");if(!ref)return;const {r,c:cc}=splitRef(ref);const t=c.getAttribute("t");
+    let v="";
+    if(t==="inlineStr"){const is=kids(c,"is")[0];v=is?textOf(is):""}
+    else{const ve=kids(c,"v")[0];if(!ve)return;v=ve.textContent;if(t==="s")v=ss[+v]??""}
+    cells.set(r+","+cc,v);
+  });
+  const merges=kids(sd,"mergeCell").map(m=>{const [a,b]=m.getAttribute("ref").split(":");const A=splitRef(a),B=splitRef(b||a);return {r1:A.r,c1:A.c,r2:B.r,c2:B.c}});
+  // widths & heights
+  const fmt=kids(sd,"sheetFormatPr")[0];
+  const defColW=fmt&&fmt.getAttribute("defaultColWidth")?+fmt.getAttribute("defaultColWidth"):((fmt&&+fmt.getAttribute("baseColWidth"))||8)+0.71;
+  const defRowH=fmt&&fmt.getAttribute("defaultRowHeight")?+fmt.getAttribute("defaultRowHeight"):15;
+  const colW={};kids(sd,"col").forEach(e=>{const w=+e.getAttribute("width");for(let i=+e.getAttribute("min");i<=+e.getAttribute("max");i++)colW[i]=w});
+  const rowH={};kids(sd,"row").forEach(e=>{if(e.getAttribute("ht"))rowH[+e.getAttribute("r")]=+e.getAttribute("ht")});
+  // existing pictures in sheet drawing
+  const sheetRels=await readRels(zip,sheetPath);
+  const drRel=sheetRels.find(r=>/\/drawing$/.test(r.type));
+  const pics=[];
+  if(drRel&&zip.file(drRel.path)){
+    const dd=parseXml(await zip.file(drRel.path).async("string"));
+    Array.from(dd.documentElement.children).forEach(a=>{
+      if(!/Anchor$/.test(a.localName)||a.localName==="absoluteAnchor")return;
+      if(!kids(a,"pic").length)return;
+      const from=kids(a,"from")[0];if(!from)return;
+      pics.push({col:+kids(from,"col")[0].textContent+1,row:+kids(from,"row")[0].textContent+1});
+    });
+  }
+  return {zip,sheetPath,cells,merges,colW,defColW,rowH,defRowH,pics};
+}
+const clean=s=>String(s??"").replace(/\s+/g,"");
+function analyze(wb){
+  const get=(r,c)=>wb.cells.get(r+","+c);
+  let hdr=null,nameCol=null;
+  for(const [k,v] of wb.cells){const t=clean(v);if(t==="성명"||t==="이름"){const [r,c]=k.split(",").map(Number);if(!hdr||r<hdr){hdr=r;nameCol=c}}}
+  if(!hdr)throw new Error("'성명' 또는 '이름' 머리글을 찾지 못했습니다.");
+  let noteCol=null,noCol=null;const hdrCells=[];
+  for(const [k,v] of wb.cells){const [r,c]=k.split(",").map(Number);if(r!==hdr)continue;hdrCells.push({c,v});const t=clean(v);if(t.includes("비고"))noteCol=c;if(t.includes("번호")&&noCol==null)noCol=c;}
+  if(noteCol==null)throw new Error("'비고' 머리글을 찾지 못했습니다. 비고 칸이 있는 일람표인지 확인해 주세요.");
+  hdrCells.sort((a,b)=>a.c-b.c);
+  const scoreCols=hdrCells.filter(h=>h.c>nameCol&&h.c<noteCol&&clean(h.v)).map(h=>{
+    const raw=String(h.v).replace(/\r/g,"");const lines=raw.split("\n").map(s=>s.trim()).filter(Boolean);
+    return {c:h.c,label:lines[0]||raw,sub:lines.slice(1).join(" "),isTotal:/^합계|^총점/.test(clean(h.v))};
+  });
+  const mergeAt=(r,c)=>wb.merges.find(m=>r>=m.r1&&r<=m.r2&&c>=m.c1&&c<=m.c2);
+  const students=[];
+  for(let r=hdr+1;r<hdr+400;r++){
+    const name=String(get(r,nameCol)??"").trim();
+    if(!name)break;
+    const noRaw=noCol!=null?String(get(r,noCol)??"").trim():String(students.length+1);
+    let cls="",num=noRaw;const m=/^(\d+)\s*[\/\-]\s*(\d+)$/.exec(noRaw);if(m){cls=m[1];num=m[2]}
+    const fmt=v=>{if(v==null||v==="")return "–";const n=Number(v);return isFinite(n)&&String(v).trim()!==""?String(Math.round(n*100)/100):String(v)};
+    const sc=scoreCols.map(s=>({label:s.label,sub:s.sub,val:fmt(get(r,s.c)),isTotal:s.isTotal}));
+    const mg=mergeAt(r,noteCol)||{r1:r,r2:r,c1:noteCol,c2:noteCol};
+    students.push({row:r,no:noRaw,cls,num,name,scores:sc,box:{c1:mg.c1,c2:mg.c2},oldSig:wb.pics.some(p=>p.row===r&&p.col>=mg.c1&&p.col<=mg.c2)});
+  }
+  if(!students.length)throw new Error("머리글 아래에서 학생 이름을 찾지 못했습니다.");
+  // subject/title lines from rows above header
+  let subject="",title="";
+  for(let r=1;r<hdr;r++)for(let c=1;c<=30;c++){const v=String(get(r,c)??"").trim();if(!v)continue;if(/교과목/.test(v))subject=v.replace(/^교과목\s*:\s*/,"");else if(/일람표/.test(v)&&!title)title=v;}
+  return {hdr,nameCol,noteCol,noCol,scoreCols,students,subject,title};
+}
+
+/* ---------- setup ---------- */
+async function handleFile(file){
+  $("setupErr").textContent="";$("setupInfo").hidden=true;
+  if(!/\.xlsx$/i.test(file.name)){$("setupErr").textContent="xlsx 파일만 불러올 수 있습니다. 엑셀에서 'Excel 통합 문서(.xlsx)'로 저장한 뒤 다시 선택해 주세요.";return}
+  try{
+    const bytes=await file.arrayBuffer();
+    const wb=await loadWorkbook(bytes);
+    const info=analyze(wb);
+    S.file=file;S.fileName=file.name;S.bytes=bytes;S.wb=wb;S.info=info;S.students=info.students;S.sigs={};S.clearOld=false;
+    S.storeKey="sig:"+file.name+":"+file.size;
+    const f=$("facts");f.innerHTML="";
+    const add=(k,v)=>{const dt=document.createElement("dt");dt.textContent=k;const dd=document.createElement("dd");dd.textContent=v;f.append(dt,dd)};
+    add("파일",file.name);
+    if(info.subject)add("교과목",info.subject);
+    add("학생 수",info.students.length+"명");
+    add("확인 항목",info.scoreCols.map(s=>s.label).join(", "));
+    add("서명 위치","비고 칸");
+    const old=info.students.filter(s=>s.oldSig);
+    const on=$("oldSigNotice");
+    if(old.length){
+      on.hidden=false;on.innerHTML="";
+      const p=document.createElement("p");p.innerHTML="<strong>이미 서명 이미지가 있는 학생이 있습니다.</strong> ";
+      p.append(old.map(s=>s.num+"번").join(", ")+" ("+old.length+"명)");
+      const lab=document.createElement("label");lab.className="check";lab.innerHTML='<input type="checkbox" id="clearOld"><span>기존 서명을 지우고 모든 학생이 새로 서명하기</span>';
+      const q=document.createElement("p");q.className="small muted";q.textContent="체크하지 않으면 기존 서명이 있는 학생은 '서명 완료'로 표시되고, 파일의 기존 서명도 그대로 남습니다.";
+      on.append(p,lab,q);
+      $("clearOld").addEventListener("change",e=>{S.clearOld=e.target.checked});
+    }else on.hidden=true;
+    const saved=storeLoad(S.storeKey);const rn=$("restoreNotice");
+    if(saved&&saved.sigs&&Object.keys(saved.sigs).length){
+      rn.hidden=false;rn.innerHTML="";
+      const p=document.createElement("p");p.innerHTML="<strong>이 기기에 같은 파일로 받은 서명 "+Object.keys(saved.sigs).length+"개가 남아 있습니다.</strong>";
+      const row=document.createElement("div");row.className="row";
+      const b1=document.createElement("button");b1.textContent="이어서 진행";b1.className="primary";
+      const b2=document.createElement("button");b2.textContent="버리고 새로 시작";
+      b1.onclick=()=>{S.sigs=saved.sigs;S.clearOld=!!saved.clearOld;const co=$("clearOld");if(co)co.checked=S.clearOld;rn.innerHTML="<p><strong>이전 서명 "+Object.keys(S.sigs).length+"개를 불러왔습니다.</strong></p>"};
+      b2.onclick=()=>{storeDrop();rn.hidden=true};
+      row.append(b1,b2);rn.append(p,row);
+    }else rn.hidden=true;
+    $("setupInfo").hidden=false;$("startBtn").focus();
+  }catch(e){console.error(e);$("setupErr").textContent="파일을 읽지 못했습니다: "+(e.message||e);}
+}
+$("fileIn").addEventListener("change",e=>{const f=e.target.files[0];if(f)handleFile(f);e.target.value=""});
+const drop=$("drop");
+["dragenter","dragover"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)handleFile(f)});
+$("startBtn").addEventListener("click",()=>{
+  storeSave();
+  const first=S.students.findIndex(s=>!isSigned(s));goStudent(first<0?0:first);
+});
+
+/* ---------- student screen ---------- */
+const isSigned=s=>!!S.sigs[s.row]||(s.oldSig&&!S.clearOld);
+S.idx=0;
+function fillSelect(){
+  const sel=$("numSel");sel.innerHTML="";
+  S.students.forEach((s,i)=>{const o=document.createElement("option");o.value=i;o.textContent=s.num+"번 "+s.name+(isSigned(s)?"  ✓ 완료":"");sel.append(o)});
+  sel.value=S.idx;
+}
+function goStudent(i){
+  S.idx=Math.max(0,Math.min(S.students.length-1,i));
+  const s=S.students[S.idx];S.current=s;
+  const cls=S.students[0].cls;
+  $("lobbyTitle").textContent=(cls?cls+"반 ":"")+"성적 확인";
+  $("lobbySubject").textContent=S.info.subject||S.info.title||"";
+  fillSelect();
+  $("prevBtn").disabled=S.idx===0;$("nextBtn").disabled=S.idx===S.students.length-1;
+  const done=S.students.filter(isSigned).length;
+  $("progBar").style.width=(done/S.students.length*100)+"%";
+  $("progText").textContent=done+" / "+S.students.length+"명 서명 완료";
+  $("resSubject").textContent=S.info.subject||"";
+  $("resName").textContent=s.name;$("resNo").textContent=(s.cls?s.cls+"반 ":"")+s.num+"번";
+  const t=$("resTable");t.innerHTML="";
+  s.scores.forEach(x=>{const tr=document.createElement("tr");if(x.isTotal)tr.className="total";
+    const th=document.createElement("th");th.textContent=x.label;if(x.sub){const sp=document.createElement("span");sp.textContent=x.sub;th.append(sp)}
+    const td=document.createElement("td");td.textContent=x.val;tr.append(th,td);t.append(tr)});
+  const signed=isSigned(s),sig=S.sigs[s.row];
+  const st=$("resState");st.innerHTML="";if(signed){const p=document.createElement("span");p.className="pill ok";p.textContent="서명 완료";st.append(p)}
+  $("signPanel").hidden=signed;$("signedPanel").hidden=!signed;
+  if(signed){
+    const im=$("signedImg");if(sig){im.src=sig.data;im.hidden=false}else{im.removeAttribute("src");im.hidden=true}
+    $("signedNote").textContent=sig?"다시 서명해야 하면 선생님께 말씀하세요.":"이 학생은 파일에 이미 서명이 들어 있습니다. 다시 서명해야 하면 선생님께 말씀하세요.";
+  }
+  $("agree").checked=false;$("signErr").textContent="";
+  show("vStudent");if(!signed)padReset();
+}
+$("numSel").addEventListener("change",e=>goStudent(+e.target.value));
+$("prevBtn").addEventListener("click",()=>goStudent(S.idx-1));
+$("nextBtn").addEventListener("click",()=>goStudent(S.idx+1));
+const pad=$("pad"),ctx=pad.getContext("2d");let strokes=[],cur=null;
+function padReset(){strokes=[];cur=null;padSize();$("padbox").classList.remove("inked")}
+function padSize(){const r=pad.getBoundingClientRect();const d=window.devicePixelRatio||1;pad.width=Math.round(r.width*d);pad.height=Math.round(r.height*d);ctx.setTransform(d,0,0,d,0,0);redraw()}
+function redraw(){ctx.clearRect(0,0,pad.width,pad.height);ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#111";ctx.lineWidth=3;
+  for(const s of strokes){ctx.beginPath();s.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));if(s.length===1)ctx.lineTo(s[0].x+.1,s[0].y+.1);ctx.stroke()}}
+const pt=e=>{const r=pad.getBoundingClientRect();return {x:e.clientX-r.left,y:e.clientY-r.top}};
+pad.addEventListener("pointerdown",e=>{e.preventDefault();pad.setPointerCapture(e.pointerId);cur=[pt(e)];strokes.push(cur);$("padbox").classList.add("inked");redraw()});
+pad.addEventListener("pointermove",e=>{if(!cur)return;cur.push(pt(e));redraw()});
+["pointerup","pointercancel"].forEach(t=>pad.addEventListener(t,()=>{cur=null}));
+window.addEventListener("resize",()=>{if(!$("vStudent").hidden&&!$("signPanel").hidden){const old=strokes;padSize();strokes=old;redraw()}});
+$("padClear").addEventListener("click",padReset);
+function cellBox(s){let W=0;for(let c=s.box.c1;c<=s.box.c2;c++)W+=colPx(c);return {W,H:rowPx(s.row)}}
+function exportSig(s){ // trimmed PNG whose stroke stays ~1.8px thick once shrunk into the 비고 cell
+  let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9,n=0;
+  strokes.forEach(st=>st.forEach(p=>{n++;minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y)}));
+  if(n<4||(maxX-minX<12&&maxY-minY<12))return null;
+  const {W,H}=cellBox(s);const bw=Math.max(8,W-6),bh=Math.max(6,H-3);
+  // first pass size (without padding) to know how much the cell will shrink it
+  let w0=maxX-minX,h0=maxY-minY;const fit0=Math.min(bw/Math.max(w0,1),bh/Math.max(h0,1)); // css px -> cell px
+  const cellStroke=1.8; // px in Excel at 100%
+  const lw=Math.max(3,cellStroke/fit0); // stroke width in pad (css) units
+  const padd=lw/2+2;minX-=padd;minY-=padd;maxX+=padd;maxY+=padd;
+  const w=maxX-minX,h=maxY-minY;
+  const fit=Math.min(bw/w,bh/h);const target=8; // 8x the in-cell size → sharp when printed or zoomed
+  const scale=Math.min(4,Math.max(0.5,fit*target),1000/w);
+  const c=document.createElement("canvas");c.width=Math.max(1,Math.round(w*scale));c.height=Math.max(1,Math.round(h*scale));
+  const x=c.getContext("2d");x.setTransform(scale,0,0,scale,-minX*scale,-minY*scale);
+  x.lineCap="round";x.lineJoin="round";x.strokeStyle="#000";x.lineWidth=lw;
+  strokes.forEach(st=>{x.beginPath();st.forEach((p,i)=>i?x.lineTo(p.x,p.y):x.moveTo(p.x,p.y));if(st.length===1)x.lineTo(st[0].x+.1,st[0].y+.1);x.stroke()});
+  return {data:c.toDataURL("image/png"),w:c.width,h:c.height};
+}
+$("signGo").addEventListener("click",()=>{
+  const s=S.current;if(!s)return;
+  if(!$("agree").checked){$("signErr").textContent="'위 성적을 확인했습니다'에 체크해 주세요.";return}
+  const img=exportSig(s);if(!img){$("signErr").textContent="서명 칸에 서명해 주세요.";return}
+  S.sigs[s.row]={...img,at:new Date().toISOString()};storeSave();
+  strokes=[];$("resTable").innerHTML="";show("vDone");
+});
+$("doneBtn").addEventListener("click",()=>goStudent(S.idx+1));
+function toLobby(){goStudent(S.idx)}
+
+/* ---------- teacher ---------- */
+$("toTeacher").addEventListener("click",()=>{renderTeacher();show("vTeacher")});
+$("tBack").addEventListener("click",()=>toLobby());
+$("tNewFile").addEventListener("click",()=>{show("vSetup");$("setupInfo").hidden=true});
+function outName(){const b=S.fileName.replace(/\.xlsx$/i,"").replace(/_?서명완료$/,"");return b+"_서명완료.xlsx"}
+function renderTeacher(){
+  const tb=$("tBody");tb.innerHTML="";let done=0;
+  S.students.forEach(s=>{
+    const tr=document.createElement("tr");const sig=S.sigs[s.row];const old=s.oldSig&&!S.clearOld;if(sig||old)done++;
+    const td=t=>{const d=document.createElement("td");if(t!=null)d.textContent=t;tr.append(d);return d};
+    td(s.num).className="n";td(s.name);
+    const st=td();const pill=document.createElement("span");pill.className="pill "+(sig?"ok":old?"old":"none");pill.textContent=sig?"서명 완료":old?"기존 서명":"미확인";st.append(pill);
+    const sg=td();if(sig){const im=document.createElement("img");im.src=sig.data;im.alt=s.name+" 서명";im.className="sigthumb";sg.append(im)}
+    const ac=td();
+    if(sig){const b=document.createElement("button");b.className="linkbtn danger";b.textContent="서명 지우기";
+      b.onclick=()=>{if(b.dataset.arm){delete S.sigs[s.row];storeSave();renderTeacher();toast(s.num+"번 서명을 지웠습니다")}else{b.dataset.arm="1";b.textContent="한 번 더 누르면 지움"}};ac.append(b)}
+    tb.append(tr);
+  });
+  $("tTitle").textContent=(S.info.subject?S.info.subject+" · ":"")+"서명 현황";
+  $("tSummary").textContent=done+" / "+S.students.length+"명 서명";
+  $("dlName").textContent="저장 이름: "+outName();$("dlErr").textContent="";
+}
+
+/* ---------- xlsx writing ---------- */
+const EMU=9525;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const b64ToBytes=d=>{const b=atob(d.split(",")[1]);const u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u};
+function colPx(c){const w=S.wb.colW[c]!=null?S.wb.colW[c]:S.wb.defColW;return Math.max(0,w*8)}
+function rowPx(r){return (S.wb.rowH[r]!=null?S.wb.rowH[r]:S.wb.defRowH)*96/72}
+function insertDrawingTag(xml,rid){
+  const root=/<([A-Za-z0-9_]+:)?worksheet\b[^>]*>/.exec(xml);const pre=root[1]||"";
+  let out=xml;
+  if(!/xmlns:r=/.test(root[0])){out=out.replace(root[0],root[0].replace(/>$/,' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'))}
+  const tag="<"+pre+'drawing r:id="'+rid+'"/>';
+  const after=["legacyDrawing","legacyDrawingHF","drawingHF","picture","oleObjects","controls","webPublishItems","tableParts"];
+  const sdEnd=out.indexOf("</"+pre+"sheetData>");
+  let pos=-1;
+  for(const n of after){const i=out.indexOf("<"+pre+n,sdEnd);if(i>=0&&/[\s>\/]/.test(out[i+pre.length+n.length+1])&&(pos<0||i<pos))pos=i}
+  const endTag="</"+pre+"worksheet>";const wEnd=out.lastIndexOf(endTag);
+  const extClose="</"+pre+"extLst>";
+  if(pos<0&&out.slice(0,wEnd).trimEnd().endsWith(extClose)){ // top-level extLst: find its matching open
+    let i=out.slice(0,wEnd).trimEnd().length-extClose.length,depth=1;const openT="<"+pre+"extLst";
+    while(depth>0&&i>0){const o=out.lastIndexOf(openT,i-1),c=out.lastIndexOf(extClose,i-1);if(o<0)break;if(c>o){depth++;i=c}else{depth--;i=o}}
+    if(depth===0)pos=i;
+  }
+  if(pos<0)pos=wEnd;
+  return out.slice(0,pos)+tag+out.slice(pos);
+}
+async function buildXlsx(){
+  const zip=await JSZip.loadAsync(S.bytes);
+  const sheetPath=S.wb.sheetPath;
+  const sheetRelsPath=relsPathFor(sheetPath);
+  let sheetRels=await readRels(zip,sheetPath);
+  let drRel=sheetRels.find(r=>/\/drawing$/.test(r.type));
+  let drawingPath;
+  const NSX="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing",NSA="http://schemas.openxmlformats.org/drawingml/2006/main",NSR="http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  let ddoc;
+  if(drRel&&zip.file(drRel.path)){drawingPath=drRel.path;ddoc=parseXml(await zip.file(drawingPath).async("string"))}
+  else{
+    let n=1;while(zip.file("xl/drawings/drawing"+n+".xml"))n++;drawingPath="xl/drawings/drawing"+n+".xml";
+    ddoc=parseXml('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="'+NSX+'" xmlns:a="'+NSA+'"></xdr:wsDr>');
+    // sheet rels
+    let relsDoc=zip.file(sheetRelsPath)?await zip.file(sheetRelsPath).async("string"):'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+    let k=1;while(new RegExp('Id="rId'+k+'"').test(relsDoc))k++;
+    const rid="rId"+k;
+    const rel='<Relationship Id="'+rid+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/'+drawingPath.split("/").pop()+'"/>';
+    relsDoc=relsDoc.replace("</Relationships>",rel+"</Relationships>");
+    zip.file(sheetRelsPath,relsDoc);
+    zip.file(sheetPath,insertDrawingTag(await zip.file(sheetPath).async("string"),rid));
+    let ct=await zip.file("[Content_Types].xml").async("string");
+    ct=ct.replace("</Types>",'<Override PartName="/'+drawingPath+'" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>');
+    zip.file("[Content_Types].xml",ct);
+  }
+  // content type for png
+  let ct=await zip.file("[Content_Types].xml").async("string");
+  if(!/Extension="png"/i.test(ct)){ct=ct.replace("</Types>",'<Default Extension="png" ContentType="image/png"/></Types>');zip.file("[Content_Types].xml",ct)}
+  // drawing rels
+  const drRelsPath=relsPathFor(drawingPath);
+  let drRels=zip.file(drRelsPath)?await zip.file(drRelsPath).async("string"):'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+  let maxRid=0;(drRels.match(/Id="rId(\d+)"/g)||[]).forEach(m=>{maxRid=Math.max(maxRid,+m.match(/\d+/)[0])});
+  // remove old signature anchors where needed
+  const root=ddoc.documentElement;
+  const byRow={};S.students.forEach(s=>byRow[s.row]=s);
+  Array.from(root.children).forEach(a=>{
+    if(!/Anchor$/.test(a.localName)||!kids(a,"pic").length)return;const from=kids(a,"from")[0];if(!from)return;
+    const r=+kids(from,"row")[0].textContent+1,c=+kids(from,"col")[0].textContent+1;const s=byRow[r];
+    if(s&&c>=s.box.c1&&c<=s.box.c2&&(S.clearOld||S.sigs[r]))root.removeChild(a);
+  });
+  let maxId=1;kids(ddoc,"cNvPr").forEach(e=>{maxId=Math.max(maxId,+e.getAttribute("id")||0)});
+  let mediaN=1;
+  const newRels=[];let anchors="";
+  for(const s of S.students){
+    const sig=S.sigs[s.row];if(!sig)continue;
+    while(zip.file("xl/media/signature"+mediaN+".png"))mediaN++;
+    const media="signature"+mediaN+".png";mediaN++;
+    zip.file("xl/media/"+media,b64ToBytes(sig.data));
+    const rid="rId"+(++maxRid);newRels.push('<Relationship Id="'+rid+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/'+media+'"/>');
+    // fit into merged 비고 box
+    const cols=[];for(let c=s.box.c1;c<=s.box.c2;c++)cols.push({c,w:colPx(c)});
+    const W=cols.reduce((a,b)=>a+b.w,0),H=rowPx(s.row);
+    const bw=Math.max(8,W-6),bh=Math.max(6,H-3);const k=Math.min(bw/sig.w,bh/sig.h);
+    const iw=sig.w*k,ih=sig.h*k;let x=(W-iw)/2;let col=s.box.c1,off=x;
+    for(const cc of cols){if(off<cc.w||cc===cols[cols.length-1]){col=cc.c;break}off-=cc.w}
+    const yOff=Math.max(0,(H-ih)/2);
+    const id=++maxId;
+    anchors+='<xdr:oneCellAnchor><xdr:from><xdr:col>'+(col-1)+'</xdr:col><xdr:colOff>'+Math.round(off*EMU)+'</xdr:colOff><xdr:row>'+(s.row-1)+'</xdr:row><xdr:rowOff>'+Math.round(yOff*EMU)+'</xdr:rowOff></xdr:from>'+
+      '<xdr:ext cx="'+Math.round(iw*EMU)+'" cy="'+Math.round(ih*EMU)+'"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="'+id+'" name="'+esc(s.num+"번 "+s.name+" 서명")+'"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>'+
+      '<xdr:blipFill><a:blip r:embed="'+rid+'"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'+Math.round(iw*EMU)+'" cy="'+Math.round(ih*EMU)+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>';
+  }
+  const frag=parseXml('<xdr:wsDr xmlns:xdr="'+NSX+'" xmlns:a="'+NSA+'" xmlns:r="'+NSR+'">'+anchors+'</xdr:wsDr>');
+  Array.from(frag.documentElement.children).forEach(n=>root.appendChild(ddoc.importNode(n,true)));
+  if(!root.getAttribute("xmlns:r"))root.setAttributeNS("http://www.w3.org/2000/xmlns/","xmlns:r",NSR);
+  let dxml=new XMLSerializer().serializeToString(ddoc);
+  if(!/^<\?xml/.test(dxml))dxml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'+dxml;
+  zip.file(drawingPath,dxml);
+  drRels=drRels.replace("</Relationships>",newRels.join("")+"</Relationships>");
+  zip.file(drRelsPath,drRels);
+  return zip.generateAsync({type:"blob",compression:"DEFLATE",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+window.__buildXlsx=buildXlsx; // used for local testing
+
+let dlApi;const dlReady=(async()=>{try{dlApi=window.claude&&window.claude.use?await window.claude.use("downloads"):null}catch(e){dlApi=null}})();
+$("dlBtn").addEventListener("click",async()=>{
+  const btn=$("dlBtn");btn.disabled=true;$("dlErr").textContent="";
+  try{
+    const blob=await buildXlsx();const name=outName();
+    if(dlApi){
+      try{await dlApi.save({filename:name,data:blob});toast("저장했습니다: "+name)}
+      catch(e){if(e&&e.code==="declined")toast("저장을 취소했습니다");else $("dlErr").textContent="저장하지 못했습니다 ("+(e&&e.code||"오류")+"). 잠시 후 다시 눌러 주세요."}
+    }else{
+      const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.append(a);a.click();
+      setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);toast("다운로드를 시작했습니다");
+    }
+  }catch(e){console.error(e);$("dlErr").textContent="파일을 만들지 못했습니다: "+(e.message||e)}
+  finally{btn.disabled=false}
+});
+})();
+</script>
+
+<script>
+if("serviceWorker" in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})})}
+</script>
+</body>
+</html>
